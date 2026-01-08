@@ -1,0 +1,93 @@
+name: Deploy Lambda
+
+on:
+  push:
+    branches:
+      - main
+      - test
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install system tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq zip
+
+
+    - name: Set environment variables
+      id: set-env-vars
+      run: |
+        if [[ "${{ github.ref_name }}" == "main" ]]; then
+          echo "ENV=prod" >> $GITHUB_ENV
+          echo "API_KEY=prod_api_key" >> $GITHUB_ENV
+          echo "LOG_LEVEL=INFO" >> $GITHUB_ENV
+        else
+          echo "ENV=test" >> $GITHUB_ENV
+          echo "API_KEY=test_api_key" >> $GITHUB_ENV
+          echo "LOG_LEVEL=DEBUG" >> $GITHUB_ENV
+        fi
+
+    - name: Package Lambda Function
+      working-directory: lambda_function
+      run: |
+        pwd
+        ls -la
+
+        python -m venv venv
+        source venv/bin/activate
+
+        mkdir -p package
+        pip install --no-cache-dir -r requirements.txt -t package
+        cp app.py package/
+
+        cd package
+        zip -r ../lambda.zip .
+        cd ../..
+
+    - name: Deploy to AWS Lambda
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: us-east-1
+      run: |
+        FUNCTION_NAME="cicd_lambda_${GITHUB_REF_NAME}"
+        REGION="us-east-1"
+
+        echo "Deploying Lambda: $FUNCTION_NAME"
+        ls -la lambda_function
+        test -f lambda_function/lambda.zip || { echo "lambda.zip not found"; exit 1; }
+
+        FUNCTION_EXISTS=$(aws lambda get-function --function-name $FUNCTION_NAME --region $REGION || echo "false")
+
+        ENV_VARS="Variables={ENV=${ENV},API_KEY=${API_KEY},LOG_LEVEL=${LOG_LEVEL}}"
+
+        if [ "$FUNCTION_EXISTS" == "false" ]; then
+          echo "Creating Lambda..."
+          aws lambda create-function \
+            --function-name $FUNCTION_NAME \
+            --runtime python3.11 \
+            --role arn:aws:iam::731439570860:role/test_dev \
+            --handler app.lambda_handler \
+            --timeout 300 \
+            --zip-file fileb://lambda_function/lambda.zip \
+            --region $REGION \
+            --environment "$ENV_VARS"
+        else
+          echo "Updating Lambda..."
+          aws lambda update-function-code \
+            --function-name $FUNCTION_NAME \
+            --region $REGION \
+            --zip-file fileb://lambda_function/lambda.zip
+        fi
+

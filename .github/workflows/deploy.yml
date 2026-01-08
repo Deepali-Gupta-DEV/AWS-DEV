@@ -43,8 +43,8 @@ jobs:
         fi
 
     - name: Package Lambda Function
+      working-directory: lambda_function
       run: |
-        cd lambda_function
         python3.11 -m venv venv
         source venv/bin/activate
         mkdir package

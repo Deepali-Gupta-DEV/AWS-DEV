@@ -43,9 +43,11 @@ jobs:
         fi
 
     - name: Package Lambda Function
-      working-directory: ./lambda_function
+      working-directory: lambda_function
       run: |
-        python3.11 -m venv venv
+	pwd
+        ls -la
+        python -m venv venv
         source venv/bin/activate
         mkdir package
         pip install --no-cache-dir -r requirements.txt -t ./package

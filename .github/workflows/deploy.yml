@@ -22,10 +22,6 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt install -y software-properties-common
-        sudo add-apt-repository ppa:deadsnakes/ppa
-        sudo apt update
-        sudo apt install -y python3.11 python3.11-venv python3.11-dev
         sudo apt-get install -y python3.11 python3.11-venv python3-pip jq zip
         pip3 install boto3
 
@@ -45,15 +41,18 @@ jobs:
     - name: Package Lambda Function
       working-directory: lambda_function
       run: |
-	pwd
+        pwd
         ls -la
+
         python -m venv venv
         source venv/bin/activate
-        mkdir package
-        pip install --no-cache-dir -r requirements.txt -t ./package
-        cp app.py ./package/
+
+        mkdir -p package
+        pip install --no-cache-dir -r requirements.txt -t package
+        cp app.py package/
+
         cd package
-        zip -r ../../lambda.zip .
+        zip -r ../lambda.zip .
         cd ../..
 
     - name: Deploy to AWS Lambda
